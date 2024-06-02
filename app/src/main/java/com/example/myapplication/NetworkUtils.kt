@@ -1,11 +1,12 @@
 package com.example.myapplication
 
-import com.google.gson.Gson
+import java.io.IOException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import java.io.IOException
+import org.json.JSONArray
+import org.json.JSONObject
 
 //---------Using Gson Library-----------
 
@@ -44,13 +45,14 @@ suspend fun fetchUsers(): ApiResponse? {
     return withContext(Dispatchers.IO) {
         return@withContext try {
             val response = client.newCall(request).execute()
-
-            if (response.isSuccessful) {
-                response.body?.string()?.let { responseBody ->
-                    return@withContext parseApiResponse(responseBody)
-                }
+            if (!response.isSuccessful) {
+                return@withContext null
             }
-            null
+
+            response.body?.string()?.let { responseBody ->
+                return@withContext parseApiResponse(responseBody)
+            }
+
         } catch (e: IOException) {
             e.printStackTrace()
             null
@@ -58,7 +60,53 @@ suspend fun fetchUsers(): ApiResponse? {
     }
 }
 
+
+//solution using JSONObject and JSONArray
+
 fun parseApiResponse(responseBody: String): ApiResponse {
+    val jsonObject = JSONObject(responseBody)
+
+    val page = jsonObject.getInt("page")
+    val perPage = jsonObject.getInt("per_page")
+    val total = jsonObject.getInt("total")
+    val totalPages = jsonObject.getInt("total_pages")
+
+    val usersArray = jsonObject.getJSONArray("data")
+    val users = parseUsers(usersArray)
+
+    val supportObject = jsonObject.getJSONObject("support")
+    val support = parseSupport(supportObject)
+
+    return ApiResponse(page, perPage, total, totalPages, users, support)
+}
+
+fun parseUsers(jsonArray: JSONArray): List<User> {
+    val users = mutableListOf<User>()
+
+    for (i in 0 until jsonArray.length()) {
+        val jsonObject = jsonArray.getJSONObject(i)
+
+        val id = jsonObject.getInt("id")
+        val email = jsonObject.getString("email")
+        val firstName = jsonObject.getString("first_name")
+        val lastName = jsonObject.getString("last_name")
+        val avatar = jsonObject.getString("avatar")
+
+        users.add(User(id, email, firstName, lastName, avatar))
+    }
+
+    return users
+}
+
+fun parseSupport(jsonObject: JSONObject): Support {
+    val url = jsonObject.getString("url")
+    val text = jsonObject.getString("text")
+    return Support(url, text)
+}
+
+//solution using string manipulation
+
+/*fun parseApiResponse(responseBody: String): ApiResponse {
     val page = extractIntValue(responseBody, "\"page\":")
     val perPage = extractIntValue(responseBody, "\"per_page\":")
     val total = extractIntValue(responseBody, "\"total\":")
@@ -115,4 +163,4 @@ fun parseSupport(supportObject: String): Support {
     val url = extractStringValue(supportObject, "\"url\":")
     val text = extractStringValue(supportObject, "\"text\":")
     return Support(url, text)
-}
+}*/
